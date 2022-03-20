@@ -5,6 +5,13 @@
 #include "utility_math.h"
 #include <png++/png.hpp>
 
+struct ivec2
+{
+	int x;
+	int y;
+};
+
+
 using namespace std;
 // http://stackoverflow.com/questions/4845410/error-lnk2019-unresolved-external-symbol-main-referenced-in-function-tmainc
 #undef main
@@ -135,10 +142,134 @@ void generateWhiteNoiseSampling(SDL_Surface* srcImg, int numSamples)
 	createPNGImage(outputPath + "white_noise_sampling.png", newImgData, srcImg->w, srcImg->h);
 }
 
-void generateBlueNoiseSampling(SDL_Surface* img, int numSamples)
+// consider Wrap around
+int GetDist(ivec2 p0, ivec2 p1, int maxW, int maxH)
 {
+	int halfW = maxW / 2;
+	int halfH = maxH / 2;
 
+	int dx = abs(p0.x - p1.x);
+	int dy = abs(p0.y - p1.y);
+
+	if (dx > halfW)
+		dx = maxW - dx;
+
+	if (dy > halfH)
+		dy = maxH - dy;
+
+	return dx * dx + dy * dy;
 }
+
+// consider wrap around
+int GetClosestDistSquared(vector<ivec2> existingPoints, ivec2 point, int maxW, int maxH)
+{
+	int curMinDistSquared = INT_MAX;
+
+	int halfWidth = maxW / 2;
+	int halfHeight = maxH / 2;
+
+	for (int i = 0; i < existingPoints.size(); i++)
+	{
+		int distSquared = GetDist(existingPoints[i], point, maxW, maxH);
+
+		if (distSquared < curMinDistSquared)
+		{
+			curMinDistSquared = distSquared;
+		}
+	}
+
+	return curMinDistSquared;
+}
+
+
+ivec2 ChooseNextBlueNoisePoint(vector<ivec2> existingPoints, vector<ivec2> candidatePoints, int maxW, int maxH)
+{
+	int curMaxDistSquared = -1;
+	ivec2 bestCandidate = { -1, -1 };
+	for (int i = 0; i < candidatePoints.size(); i++)
+	{
+		// closest dist from existing point
+		int distSquared = GetClosestDistSquared(existingPoints, candidatePoints[i], maxW, maxH);
+
+		if (distSquared > curMaxDistSquared)
+		{
+			curMaxDistSquared = distSquared;
+			bestCandidate = candidatePoints[i];
+		}
+	}
+
+	return bestCandidate;
+}
+
+
+void generateBlueNoiseSampling(SDL_Surface* srcImg, int numSamples)
+{
+	uint8* srcImgData = (uint8*)(srcImg->pixels);
+
+	int numPixels = srcImg->w * srcImg->h;
+	int numBytes = numPixels * 4;
+	uint8* newImgData = new uint8[numBytes];
+	memset(newImgData, 0, numBytes);
+
+	ResetImage(newImgData, numPixels);
+
+	int count = numSamples;
+
+	vector<ivec2> existingPoints;
+	vector<ivec2> candidatePoints;
+
+
+	int generationConstant = 1;
+
+	while (count)
+	{
+		if (count % 10 == 0)
+		{
+			cout << "count is " << count << endl;
+		}
+		// first point
+		if (count == numSamples)
+		{
+			int x = utl::randInt(0, srcImg->w - 1);
+			int y = utl::randInt(0, srcImg->h - 1);
+
+			int pixelIndex = y * srcImg->w + x;
+
+			CopyPixelValue(newImgData, srcImgData, pixelIndex);
+			existingPoints.push_back({x, y});
+			count--;
+		}
+		else
+		{
+			int numCandidates = generationConstant * existingPoints.size();
+
+			for (int i = 0; i < numCandidates; i++)
+			{
+				int x = utl::randInt(0, srcImg->w - 1);
+				int y = utl::randInt(0, srcImg->h - 1);
+			
+				candidatePoints.push_back({ x, y });
+			}
+			ivec2 candidate = ChooseNextBlueNoisePoint(existingPoints, candidatePoints, srcImg->w, srcImg->h);
+
+			assert(candidate.x != -1);
+
+			int pixelIndex = candidate.y * srcImg->w + candidate.x;
+			CopyPixelValue(newImgData, srcImgData, pixelIndex);
+			existingPoints.push_back(candidate);
+			count--;
+
+			candidatePoints.clear();
+		}
+
+	}
+
+	createPNGImage(outputPath + "blue_noise_sampling.png", newImgData, srcImg->w, srcImg->h);
+}
+
+
+
+
 /*
 void runDXT3(string img)
 {
@@ -290,11 +421,6 @@ void TestGetAlphaBYBlock(string img)
 }
 */
 
-struct ivec2
-{
-	int x;
-	int y;
-};
 
 ivec2 GetNumSamples(SDL_Surface* img)
 {
@@ -320,6 +446,12 @@ int main(int argc, char *argv[])
 	generateWhiteNoiseSampling(image0, total);
 	generateBlueNoiseSampling(image0, total);
 
+	cout << "end of program" << endl;
+
+	while (1)
+	{
+
+	}
 	return 0;
 }
 
