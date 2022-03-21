@@ -1,9 +1,12 @@
 
 #include <fstream>
 #include "define.h"
-#include "utility_sdl.h"
 #include "utility_math.h"
-#include <png++/png.hpp>
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image.h"
+#include "stb_image_write.h"
 
 struct ivec2
 {
@@ -11,6 +14,13 @@ struct ivec2
 	int y;
 };
 
+struct Image
+{
+	int w = 0;
+	int h = 0;
+	int channels = 0;
+	uint8* pixels;
+};
 
 using namespace std;
 // http://stackoverflow.com/questions/4845410/error-lnk2019-unresolved-external-symbol-main-referenced-in-function-tmainc
@@ -27,18 +37,7 @@ int pixelIndex2PixelStart(int width, int px, int py)
 
 void createPNGImage(string filename, uint8* pixels, int width, int height)
 {
-	png::image< png::rgba_pixel > image(width, height);
-
-	for (int y = 0; y < image.get_height(); ++y)
-	{
-		for (int x = 0; x < image.get_width(); ++x)
-		{
-			int ps = pixelIndex2PixelStart(width, x, y);
-			image[y][x] = png::rgba_pixel(pixels[ps+0], pixels[ps+1], pixels[ps+2], pixels[ps+3]);
-		}
-	}
-
-	image.write(filename);
+	stbi_write_png(filename.c_str(), width, height, 4, pixels, 0);
 }
 
 void CopyPixelValue(uint8* dst, uint8* src, int pixelIndex)
@@ -63,23 +62,24 @@ void ResetPixelValue(uint8* dst, int pixelIndex)
 	dst[byteIndex + 3] = 255;
 }
 
-void GenerateRegularSampling(SDL_Surface* srcImg, int numSamplesX, int numSamplesY)
-{
-	uint8* srcImgData = (uint8*)(srcImg->pixels);
 
-	int numBytes = srcImg->w * srcImg->h * 4;
+void GenerateRegularSampling(Image srcImg, int numSamplesX, int numSamplesY)
+{
+	uint8* srcImgData = (uint8*)(srcImg.pixels);
+
+	int numBytes = srcImg.w * srcImg.h * 4;
 	uint8* dstImgData = new uint8[numBytes];
 	memset(dstImgData, 0, numBytes);
 
-	int xStride = srcImg->w / numSamplesX;
-	int yStride = srcImg->h / numSamplesY;
+	int xStride = srcImg.w / numSamplesX;
+	int yStride = srcImg.h / numSamplesY;
 
-	for (int y = 0; y < srcImg->h; y++)
+	for (int y = 0; y < srcImg.h; y++)
 	{
-		for (int x = 0; x < srcImg->w; x++)
+		for (int x = 0; x < srcImg.w; x++)
 		{
 			// pixel index --> byte index
-			int pixelIndex = y * srcImg->w + x;
+			int pixelIndex = y * srcImg.w + x;
 
 			if (y % yStride == 0 && x % xStride == 0)
 			{
@@ -92,9 +92,9 @@ void GenerateRegularSampling(SDL_Surface* srcImg, int numSamplesX, int numSample
 		}
 	}
 
-	createPNGImage(outputPath + "regular_sampling.png", dstImgData, srcImg->w, srcImg->h);
+	createPNGImage(outputPath + "regular_sampling.png", dstImgData, srcImg.w, srcImg.h);
 }
-
+#if 1
 void ResetImage(uint8* imgData, int numPixels)
 {
 	for (int i = 0; i < numPixels; i++)
@@ -103,11 +103,11 @@ void ResetImage(uint8* imgData, int numPixels)
 	}
 }
 
-void generateWhiteNoiseSampling(SDL_Surface* srcImg, int numSamples)
+void generateWhiteNoiseSampling(Image srcImg, int numSamples)
 {
-	uint8* srcImgData = (uint8*)(srcImg->pixels);
+	uint8* srcImgData = srcImg.pixels;
 
-	int numPixels = srcImg->w * srcImg->h;
+	int numPixels = srcImg.w * srcImg.h;
 	int numBytes = numPixels * 4;
 	uint8* newImgData = new uint8[numBytes];
 	memset(newImgData, 0, numBytes);
@@ -121,10 +121,10 @@ void generateWhiteNoiseSampling(SDL_Surface* srcImg, int numSamples)
 
 	while (count)
 	{
-		int x = utl::randInt(0, srcImg->w - 1);
-		int y = utl::randInt(0, srcImg->h - 1);
+		int x = utl::randInt(0, srcImg.w - 1);
+		int y = utl::randInt(0, srcImg.h - 1);
 
-		int pixelIndex = y * srcImg->w + x;
+		int pixelIndex = y * srcImg.w + x;
 
 		if (flags[pixelIndex])
 		{
@@ -139,7 +139,7 @@ void generateWhiteNoiseSampling(SDL_Surface* srcImg, int numSamples)
 		}
 	}
 
-	createPNGImage(outputPath + "white_noise_sampling.png", newImgData, srcImg->w, srcImg->h);
+	createPNGImage(outputPath + "white_noise_sampling.png", newImgData, srcImg.w, srcImg.h);
 }
 
 // consider Wrap around
@@ -202,11 +202,11 @@ ivec2 ChooseNextBlueNoisePoint(vector<ivec2> existingPoints, vector<ivec2> candi
 }
 
 
-void generateBlueNoiseSampling(SDL_Surface* srcImg, int numSamples)
+void generateBlueNoiseSampling(Image srcImg, int numSamples)
 {
-	uint8* srcImgData = (uint8*)(srcImg->pixels);
+	uint8* srcImgData = (uint8*)(srcImg.pixels);
 
-	int numPixels = srcImg->w * srcImg->h;
+	int numPixels = srcImg.w * srcImg.h;
 	int numBytes = numPixels * 4;
 	uint8* newImgData = new uint8[numBytes];
 	memset(newImgData, 0, numBytes);
@@ -230,10 +230,10 @@ void generateBlueNoiseSampling(SDL_Surface* srcImg, int numSamples)
 		// first point
 		if (count == numSamples)
 		{
-			int x = utl::randInt(0, srcImg->w - 1);
-			int y = utl::randInt(0, srcImg->h - 1);
+			int x = utl::randInt(0, srcImg.w - 1);
+			int y = utl::randInt(0, srcImg.h - 1);
 
-			int pixelIndex = y * srcImg->w + x;
+			int pixelIndex = y * srcImg.w + x;
 
 			CopyPixelValue(newImgData, srcImgData, pixelIndex);
 			existingPoints.push_back({x, y});
@@ -245,16 +245,16 @@ void generateBlueNoiseSampling(SDL_Surface* srcImg, int numSamples)
 
 			for (int i = 0; i < numCandidates; i++)
 			{
-				int x = utl::randInt(0, srcImg->w - 1);
-				int y = utl::randInt(0, srcImg->h - 1);
+				int x = utl::randInt(0, srcImg.w - 1);
+				int y = utl::randInt(0, srcImg.h - 1);
 			
 				candidatePoints.push_back({ x, y });
 			}
-			ivec2 candidate = ChooseNextBlueNoisePoint(existingPoints, candidatePoints, srcImg->w, srcImg->h);
+			ivec2 candidate = ChooseNextBlueNoisePoint(existingPoints, candidatePoints, srcImg.w, srcImg.h);
 
 			assert(candidate.x != -1);
 
-			int pixelIndex = candidate.y * srcImg->w + candidate.x;
+			int pixelIndex = candidate.y * srcImg.w + candidate.x;
 			CopyPixelValue(newImgData, srcImgData, pixelIndex);
 			existingPoints.push_back(candidate);
 			count--;
@@ -264,187 +264,38 @@ void generateBlueNoiseSampling(SDL_Surface* srcImg, int numSamples)
 
 	}
 
-	createPNGImage(outputPath + "blue_noise_sampling.png", newImgData, srcImg->w, srcImg->h);
+	createPNGImage(outputPath + "blue_noise_sampling.png", newImgData, srcImg.w, srcImg.h);
 }
 
 
-
-
-/*
-void runDXT3(string img)
+ivec2 GetNumSamples(Image img)
 {
-	string core = "";
-
-	for (int i = 0; i < img.size() - 4; i++)
-	{
-		core += img[i];
-	}
-	cout << core << endl;
-
-	string image0Name = img;
-	SDL_Surface* image0 = utl::loadSDLImage(inputPath + image0Name);
-	createPNGImage(outputPath + image0Name, (uint8*)(image0->pixels), image0->w, image0->h);
-
-
-	// assuming 4:1 compression ratio
-	int numBytes = image0->w * image0->h * 4;
-	int numCompressedBytes = numBytes / 4;
-	uint8* compressedImage0Pixels = new uint8[numCompressedBytes];
-	memset(compressedImage0Pixels, 0, numCompressedBytes);
-
-	DXTConverter dxtConverter;
-	dxtConverter.compressDXT3((uint8*)image0->pixels, (uint8*)compressedImage0Pixels, image0->w, image0->h);
-
-	string binFilePath = outputPath + core + "_dxt3.bin";
-	writeBinFile(binFilePath, compressedImage0Pixels, numCompressedBytes);
-
-	streampos size;
-	char* compressedImageBinaryData = NULL;
-	ifstream readFile(binFilePath.c_str(), ios::in | ios::binary | ios::ate);
-	if (readFile.is_open())
-	{
-		size = readFile.tellg();
-		compressedImageBinaryData = new char[size];
-		readFile.seekg(0, ios::beg);
-		readFile.read(compressedImageBinaryData, size);
-		readFile.close();
-	}
-
-	uint8* newImage0Pixels = new uint8[numBytes];
-	memset(newImage0Pixels, 0, numBytes);
-	dxtConverter.decompressDXT3((uint8*)compressedImageBinaryData, newImage0Pixels, image0->w, image0->h);
-
-	string decompressFileName = core + "_dxt3_decompress.png";
-	string decompressFilePath = outputPath + decompressFileName;
-	createPNGImage(decompressFilePath.c_str(), newImage0Pixels, image0->w, image0->h);
-
-	cout << "testDXT3 Done " << endl;
-}
-
-
-void runDXT5(string img)
-{
-	string core = "";
-
-	for (int i = 0; i < img.size() - 4; i++)
-	{
-		core += img[i];
-	}
-	cout << core << endl;
-
-	string image0Name = img;
-	SDL_Surface* image0 = utl::loadSDLImage(inputPath + image0Name);
-	createPNGImage(outputPath + image0Name, (uint8*)(image0->pixels), image0->w, image0->h);
-
-	// assuming 4:1 compression ratio
-	int numBytes = image0->w * image0->h * 4;
-	int numCompressedBytes = numBytes / 4;
-	uint8* compressedImage0Pixels = new uint8[numCompressedBytes];
-	memset(compressedImage0Pixels, 0, numCompressedBytes);
-
-
-	uint8* debugPixels = new uint8[numBytes];
-
-
-	DXTConverter dxtConverter;
-	dxtConverter.compressDXT5((uint8*)image0->pixels, (uint8*)compressedImage0Pixels, image0->w, image0->h);
-
-
-
-	string binFilePath = outputPath + core + "_dxt5.bin";
-	writeBinFile(binFilePath, compressedImage0Pixels, numCompressedBytes);
-
-	streampos size;
-	char* compressedImageBinaryData = NULL;
-	ifstream readFile(binFilePath.c_str(), ios::in | ios::binary | ios::ate);
-	if (readFile.is_open())
-	{
-		size = readFile.tellg();
-		compressedImageBinaryData = new char[size];
-		readFile.seekg(0, ios::beg);
-		readFile.read(compressedImageBinaryData, size);
-		readFile.close();
-	}
-
-
-	uint8* newImage0Pixels = new uint8[numBytes];
-	memset(newImage0Pixels, 0, numBytes);
-	dxtConverter.decompressDXT5((uint8*)compressedImageBinaryData, newImage0Pixels, image0->w, image0->h);
-
-	string decompressFileName = core + "_dxt5_decompress.png";
-	string decompressFilePath = outputPath + decompressFileName;
-	createPNGImage(decompressFilePath.c_str(), newImage0Pixels, image0->w, image0->h);
-
-	cout << "testDXT5 Done " << endl;
-}
-*/
-
-/*
-
-void TestGetAlphaBYBlock(string img)
-{
-
-	string core = "";
-
-	for (int i = 0; i < img.size() - 4; i++)
-	{
-		core += img[i];
-	}
-	cout << core << endl;
-
-
-	string image0Name = img;
-	SDL_Surface* image0 = utl::loadSDLImage(inputPath + image0Name);
-
-
-	copyImageAlphaChannel("alphaSample.bmp", (uint8*)image0->pixels, image0->w, image0->h);
-
-	// assuming 8:1 compression ratio
-	int numBytes = image0->w * image0->h * 4;
-	int numCompressedBytes = numBytes / 2;
-	uint8* compressedImage0Pixels = new uint8[numCompressedBytes];
-	memset(compressedImage0Pixels, 0, numCompressedBytes);
-
-
-	uint8* newImage0Pixels = new uint8[numBytes];
-	memset(newImage0Pixels, 0, numBytes);
-
-	DXTConverter dxtConverter;
-	dxtConverter.DebugCompressTest((uint8*)image0->pixels, (uint8*)compressedImage0Pixels, newImage0Pixels, image0->w, image0->h);
-	dxtConverter.DebugDecompressTest((uint8*)compressedImage0Pixels, newImage0Pixels, image0->w, image0->h);
-
-	//	createImage(decompressFilePath.c_str(), newImage0Pixels, image0->w, image0->h);
-	createPNGImage("alpha_smokeTest.png", newImage0Pixels, image0->w, image0->h);
-//	copyImageAlphaChannel("alpha_smokeTest.bmp", newImage0Pixels, image0->w, image0->h);
-
-	cout << "runDXT1 Done " << endl;
-}
-*/
-
-
-ivec2 GetNumSamples(SDL_Surface* img)
-{
-	int w = img->w / 4;
-	int h = img->h / 4;
+	int w = img.w / 4;
+	int h = img.h / 4;
 	
 	return { w, h };
 }
 
 
+
+#endif
+
 int main(int argc, char *argv[])
 {	
-	SDL_Surface* screen;
-	utl::initSDL(SCREEN_WIDTH, SCREEN_HEIGHT, screen);
-	
-	string imgFile = "lena.png";
-	SDL_Surface* image0 = utl::loadSDLImage(inputPath + imgFile);
 
-	ivec2 samples = GetNumSamples(image0);
+	
+	string imgFile = "lena.png";	
+	string fullImgFile = inputPath + imgFile;
+	Image img;
+	unsigned char* data = stbi_load(fullImgFile.c_str(), &img.w, &img.h, &img.channels, 4);
+	img.pixels = (uint8*)data;
+
+	ivec2 samples = GetNumSamples(img);
 	int total = samples.x * samples.y;
 
-	GenerateRegularSampling(image0, samples.x, samples.y);
-	generateWhiteNoiseSampling(image0, total);
-	generateBlueNoiseSampling(image0, total);
+	GenerateRegularSampling(img, samples.x, samples.y);
+	generateWhiteNoiseSampling(img, total);
+	generateBlueNoiseSampling(img, total);
 
 	cout << "end of program" << endl;
 
@@ -452,6 +303,7 @@ int main(int argc, char *argv[])
 	{
 
 	}
+	
 	return 0;
 }
 
