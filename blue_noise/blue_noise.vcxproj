@@ -133,15 +133,16 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="utility\utility_debug.cpp" />
-    <ClCompile Include="utility\utility_math.cpp" />
+    <ClCompile Include="utility\utl_debug.cpp" />
+    <ClCompile Include="utility\utl_math.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="define.h" />
+    <ClInclude Include="fast_poisson.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="stb_image_write.h" />
-    <ClInclude Include="utility\utility_debug.h" />
-    <ClInclude Include="utility\utility_math.h" />
+    <ClInclude Include="utility\utl_debug.h" />
+    <ClInclude Include="utility\utl_math.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

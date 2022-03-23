@@ -1,18 +1,16 @@
 
 #include <fstream>
 #include "define.h"
-#include "utility_math.h"
+#include "utl_math.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image.h"
 #include "stb_image_write.h"
 
-struct ivec2
-{
-	int x;
-	int y;
-};
+#include "fast_poisson.h"
+
+
 
 struct Image
 {
@@ -142,23 +140,6 @@ void generateWhiteNoiseSampling(Image srcImg, int numSamples)
 	createPNGImage(outputPath + "white_noise_sampling.png", newImgData, srcImg.w, srcImg.h);
 }
 
-// consider Wrap around
-int GetDist(ivec2 p0, ivec2 p1, int maxW, int maxH)
-{
-	int halfW = maxW / 2;
-	int halfH = maxH / 2;
-
-	int dx = abs(p0.x - p1.x);
-	int dy = abs(p0.y - p1.y);
-
-	if (dx > halfW)
-		dx = maxW - dx;
-
-	if (dy > halfH)
-		dy = maxH - dy;
-
-	return dx * dx + dy * dy;
-}
 
 // consider wrap around
 int GetClosestDistSquared(vector<ivec2> existingPoints, ivec2 point, int maxW, int maxH)
@@ -170,7 +151,7 @@ int GetClosestDistSquared(vector<ivec2> existingPoints, ivec2 point, int maxW, i
 
 	for (int i = 0; i < existingPoints.size(); i++)
 	{
-		int distSquared = GetDist(existingPoints[i], point, maxW, maxH);
+		int distSquared = utl::GetDistSquared(existingPoints[i], point, maxW, maxH, true);
 
 		if (distSquared < curMinDistSquared)
 		{
@@ -201,8 +182,8 @@ ivec2 ChooseNextBlueNoisePoint(vector<ivec2> existingPoints, vector<ivec2> candi
 	return bestCandidate;
 }
 
-
-void generateBlueNoiseSampling(Image srcImg, int numSamples)
+// Mitchell's best candidate N^2
+void generateBlueNoiseSampling_BestCandidate(Image srcImg, int numSamples)
 {
 	uint8* srcImgData = (uint8*)(srcImg.pixels);
 
@@ -268,6 +249,62 @@ void generateBlueNoiseSampling(Image srcImg, int numSamples)
 }
 
 
+void generateBlueNoiseSampling_DartThrowing(Image srcImg, int numSamples)
+{
+	float sqrtN = sqrt(2);
+	float cellSize = 4 / sqrtN;
+
+
+}
+
+// https://www.youtube.com/watch?v=flQgnCUxHlw&ab_channel=TheCodingTrain
+void generateBlueNoiseSampling_RobertBridson(Image srcImg, int numSamples)
+{
+	int r = 4; // 4 pixels apart
+	int n = 2;	// this is the dimension, 2 for our case
+	float sqrtN = sqrt(n);
+
+	int k = 30;	// limit of samples before rejection in the algorithm
+	float cellSize = r / sqrtN;
+
+	// step 0
+	FastPoisson::Grid grid;
+	grid.Init(srcImg.w, srcImg.h, cellSize);
+
+	// select a random point
+	int x = utl::randInt(0, srcImg.w - 1);
+	int y = utl::randInt(0, srcImg.h - 1);
+	
+	vector<ivec2> activePoints;
+
+	// step 1
+	int index = activePoints.size();
+	activePoints.push_back({x, y});
+	grid.AddPoint(x, y, index);
+
+
+	// step 2
+	for (int i = 0; i < 100; i++)
+	{
+		int randIndex = utl::randInt(0, activePoints.size()-1);
+		ivec2 point = activePoints[randIndex];
+
+		ivec2 newPoint;
+		if (TryGenerateNextPoint(point, r, r*2, k, grid, srcImg.w, srcImg.h, activePoints, newPoint))
+		{
+			int index2 = activePoints.size();
+			activePoints.push_back(newPoint);
+			grid.AddPoint(newPoint.x, newPoint.y, index2);
+		}
+		else
+		{
+			activePoints.erase(activePoints.begin() + randIndex);
+		}
+
+	}
+}
+
+
 ivec2 GetNumSamples(Image img)
 {
 	int w = img.w / 4;
@@ -295,7 +332,7 @@ int main(int argc, char *argv[])
 
 	GenerateRegularSampling(img, samples.x, samples.y);
 	generateWhiteNoiseSampling(img, total);
-	generateBlueNoiseSampling(img, total);
+	generateBlueNoiseSampling_BestCandidate(img, total);
 
 	cout << "end of program" << endl;
 

@@ -1,4 +1,4 @@
-#include "utility_math.h"
+#include "utl_math.h"
 #include <assert.h>     /* assert */
 
 // const float utl::MATH_EPSILON = 1e-5;
@@ -42,4 +42,27 @@ bool utl::sameSign(float a, float b)
 }
 
 
+// consider Wrap around
+int utl::GetDistSquared(ivec2 p0, ivec2 p1, int maxW, int maxH, bool checkWrapAround)
+{
+	int dx = abs(p0.x - p1.x);
+	int dy = abs(p0.y - p1.y);
 
+	if (checkWrapAround)
+	{
+		int halfW = maxW / 2;
+		int halfH = maxH / 2;
+
+		if (dx > halfW)
+			dx = maxW - dx;
+
+		if (dy > halfH)
+			dy = maxH - dy;
+	}
+	return dx * dx + dy * dy;
+}
+
+int utl::GetDistSquared(ivec2 p0, ivec2 p1)
+{
+	return GetDistSquared(p0, p1, 0, 0, false);
+}

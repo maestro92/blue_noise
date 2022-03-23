@@ -8,6 +8,13 @@
 
 using namespace std;
 
+struct ivec2
+{
+	int x;
+	int y;
+};
+
+
 namespace utl
 {
 
@@ -31,5 +38,10 @@ namespace utl
 	}
 	
 	bool sameSign(float a, float b);
+
+	// consider Wrap around
+	int GetDistSquared(ivec2 p0, ivec2 p1, int maxW, int maxH, bool checkWrapAround);
+
+	int GetDistSquared(ivec2 p0, ivec2 p1);
 }
 #endif
