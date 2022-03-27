@@ -1,5 +1,12 @@
 #include "utl_math.h"
 #include <assert.h>     /* assert */
+#include <iostream>
+
+ostream& operator<<(ostream& os, const ivec2& vec)
+{
+	os << vec.x << " " << vec.y;
+	return os;
+}
 
 // const float utl::MATH_EPSILON = 1e-5;
 string utl::intToStr(int value)
@@ -16,16 +23,28 @@ string utl::floatToStr(float value)
     return buff.str();
 }
 
+void utl::setRandSeed(int seed)
+{
+	srand(seed);
+}
+
 int utl::randInt(int min, int max)
 {
-	assert(max > min);
+	assert(max >= min);
+	if (min == max)
+		return min;
+
 	int diff = max - min;
-	int result = rand() & diff;
+	int result = rand() % diff;
 	return result + min;
 }
 
 float utl::randFloat(float min, float max)
 {
+	assert(max >= min);
+	if (min == max)
+		return min;
+
     float num = (float)rand() / (float) RAND_MAX;
     return min + (max - min) * num;
 }

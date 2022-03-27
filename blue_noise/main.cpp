@@ -42,24 +42,22 @@ void CopyPixelValue(uint8* dst, uint8* src, int pixelIndex)
 {
 	int byteIndex = pixelIndex * 4;
 	memcpy((void*)(dst+byteIndex), (void*)(src+byteIndex), 4);
-	/*
-	newImgData[byteIndex] = ((uint8*)(srcImg->pixels))[byteIndex];
-	newImgData[byteIndex + 1] = ((uint8*)(srcImg->pixels))[byteIndex + 1];
-	newImgData[byteIndex + 2] = ((uint8*)(srcImg->pixels))[byteIndex + 2];
-	newImgData[byteIndex + 3] = ((uint8*)(srcImg->pixels))[byteIndex + 3];
-	*/
+}
+
+void SetPixelValue(uint8* dst, int pixelIndex, ivec4 color)
+{
+	int byteIndex = pixelIndex * 4;
+
+	dst[byteIndex] = color.x;
+	dst[byteIndex + 1] = color.y;
+	dst[byteIndex + 2] = color.z;
+	dst[byteIndex + 3] = color.w;
 }
 
 void ResetPixelValue(uint8* dst, int pixelIndex)
 {
-	int byteIndex = pixelIndex * 4;
-
-	dst[byteIndex] = 0;
-	dst[byteIndex + 1] = 0;
-	dst[byteIndex + 2] = 0;
-	dst[byteIndex + 3] = 255;
+	SetPixelValue(dst, pixelIndex, { 0,0,0,255 });
 }
-
 
 void GenerateRegularSampling(Image srcImg, int numSamplesX, int numSamplesY)
 {
@@ -257,9 +255,55 @@ void generateBlueNoiseSampling_DartThrowing(Image srcImg, int numSamples)
 
 }
 
+
+void renderGridHorizontalLine(Image srcImg, int y, uint8* newImgData)
+{
+	for (int x = 0; x < srcImg.w; x++)
+	{
+		int pixelIndex = y * srcImg.w + x;
+
+		SetPixelValue(newImgData, pixelIndex, { 255,255,255,255 });
+	}
+}
+
+void renderGridVerticalLine(Image srcImg, int x, uint8* newImgData)
+{
+	for (int y = 0; y < srcImg.h; y++)
+	{
+		int pixelIndex = y * srcImg.w + x;
+
+		SetPixelValue(newImgData, pixelIndex, { 255,255,255,255 });
+	}
+}
+
+
+void renderGrid(FastPoisson::Grid grid, Image srcImg, uint8* newImgData)
+{
+	for (int y = 0; y < srcImg.h; y += grid.cellSize)
+	{
+		renderGridHorizontalLine(srcImg, y, newImgData);
+	}
+
+	for (int x = 0; x < srcImg.w; x += grid.cellSize)
+	{
+		renderGridVerticalLine(srcImg, x, newImgData);
+	}
+}
+
+
+void AppendToVector(vector<ivec2>& list0, vector<ivec2>& list1)
+{
+	for (int i = 0; i < list1.size(); i++)
+	{
+		list0.push_back(list1[i]);
+	}
+}
+
+
 // https://www.youtube.com/watch?v=flQgnCUxHlw&ab_channel=TheCodingTrain
 void generateBlueNoiseSampling_RobertBridson(Image srcImg, int numSamples)
 {
+	// numSamples = 25;
 	int r = 4; // 4 pixels apart
 	int n = 2;	// this is the dimension, 2 for our case
 	float sqrtN = sqrt(n);
@@ -271,37 +315,81 @@ void generateBlueNoiseSampling_RobertBridson(Image srcImg, int numSamples)
 	FastPoisson::Grid grid;
 	grid.Init(srcImg.w, srcImg.h, cellSize);
 
+	utl::setRandSeed(0);
+
 	// select a random point
 	int x = utl::randInt(0, srcImg.w - 1);
 	int y = utl::randInt(0, srcImg.h - 1);
 	
+	ivec2 point = { x, y };
+
+	cout << "x " << x << " y " << y << ", cell size " << grid.cellSize << endl;
+
 	vector<ivec2> activePoints;
+	vector<ivec2> outputSamplePoints;
 
 	// step 1
+	outputSamplePoints.push_back(point);
 	int index = activePoints.size();
-	activePoints.push_back({x, y});
+	activePoints.push_back(point);
 	grid.AddPoint(x, y, index);
 
 
-	// step 2
-	for (int i = 0; i < 100; i++)
+	int i = 0;
+
+	while(0 < activePoints.size() && outputSamplePoints.size() < numSamples)
 	{
 		int randIndex = utl::randInt(0, activePoints.size()-1);
 		ivec2 point = activePoints[randIndex];
+		
+		cout << "i " << i << endl;
 
-		ivec2 newPoint;
-		if (TryGenerateNextPoint(point, r, r*2, k, grid, srcImg.w, srcImg.h, activePoints, newPoint))
+		cout << "			 randIndex " << randIndex << ": " << point << endl;
+		
+		ivec2 output;
+		if (FastPoisson::TryGenerateNewPoints(point, r, r*2, k, grid, srcImg.w, srcImg.h, outputSamplePoints, output))
 		{
-			int index2 = activePoints.size();
-			activePoints.push_back(newPoint);
-			grid.AddPoint(newPoint.x, newPoint.y, index2);
+			int index2 = outputSamplePoints.size();
+			activePoints.push_back(output);
+			outputSamplePoints.push_back(output);
+			grid.AddPoint(output.x, output.y, index2);
 		}
 		else
 		{
 			activePoints.erase(activePoints.begin() + randIndex);
 		}
 
+		if (i == 578)
+		{
+		//	break;
+		}
+
+		i++;
 	}
+
+
+	uint8* srcImgData = (uint8*)(srcImg.pixels);
+
+	int numPixels = srcImg.w * srcImg.h;
+	int numBytes = numPixels * 4;
+	uint8* newImgData = new uint8[numBytes];
+	memset(newImgData, 0, numBytes);
+
+	ResetImage(newImgData, numPixels);
+
+	// renderGrid(grid, srcImg, newImgData);
+
+
+	for (int i = 0; i < outputSamplePoints.size(); i++)
+	{
+		ivec2 point = outputSamplePoints[i];
+
+		int pixelIndex = point.y * srcImg.w + point.x;
+
+		CopyPixelValue(newImgData, srcImgData, pixelIndex);
+	}
+
+	createPNGImage(outputPath + "blue_noise_sampling_2.png", newImgData, srcImg.w, srcImg.h);
 }
 
 
@@ -332,7 +420,8 @@ int main(int argc, char *argv[])
 
 	GenerateRegularSampling(img, samples.x, samples.y);
 	generateWhiteNoiseSampling(img, total);
-	generateBlueNoiseSampling_BestCandidate(img, total);
+	// generateBlueNoiseSampling_BestCandidate(img, total);	too slow
+	generateBlueNoiseSampling_RobertBridson(img, total);
 
 	cout << "end of program" << endl;
 

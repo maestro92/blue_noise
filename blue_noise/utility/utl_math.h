@@ -12,8 +12,25 @@ struct ivec2
 {
 	int x;
 	int y;
+
+	friend ostream& operator<<(ostream& os, const ivec2& vec);
 };
 
+
+struct ivec4
+{
+	int x;
+	int y;
+	int z;
+	int w;
+};
+
+
+struct vec2
+{
+	float x;
+	float y;
+};
 
 namespace utl
 {
@@ -28,6 +45,8 @@ namespace utl
 
 	string intToStr(int value);
 	string floatToStr(float value);
+
+	void setRandSeed(int seed);
 
 	int randInt(int min = 0, int max = 100);
 	float randFloat(float min = 0, float max = 1);
